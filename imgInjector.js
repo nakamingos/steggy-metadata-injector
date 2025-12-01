@@ -116,7 +116,7 @@ function parseFilename(filename) {
 }
 
 // Function to update both JSON files
-function updateJsonFiles(filename, uris, hash, parsedFile, stats, isHonorary) {
+async function updateJsonFiles(filename, uris, hash, parsedFile, stats, isHonorary) {
     const metadataDir = path.join(__dirname, 'metadata');
     
     // Ensure metadata directory exists
@@ -161,9 +161,26 @@ function updateJsonFiles(filename, uris, hash, parsedFile, stats, isHonorary) {
         }
     );
     
+    // Check if this SHA already exists
+    const existingBySha = metadataArray.find(item => item.sha === hash);
+    
+    if (existingBySha) {
+        console.log('\n⚠️  WARNING: This SHA already exists in metadata!');
+        console.log('\nExisting entry:');
+        console.log(JSON.stringify(existingBySha, null, 2));
+        console.log('\nThis means you\'re processing the same image data again.');
+        
+        const replaceConfirm = await askQuestion('\nReplace existing entry and keep its index? (y/n): ');
+        if (replaceConfirm.trim().toLowerCase() !== 'y') {
+            console.log('Cancelled. No files were updated.');
+            rl.close();
+            return { cancelled: true };
+        }
+    }
+    
     const newMetadataEntry = {
         id: "",
-        index: 0, // Will be updated after sorting
+        index: existingBySha ? existingBySha.index : 0, // Will be updated after sorting if new
         sha: hash,
         name: parsedFile.fullName,
         description: "",
@@ -173,7 +190,7 @@ function updateJsonFiles(filename, uris, hash, parsedFile, stats, isHonorary) {
 
     // Add or update metadata entry
     const existingIndex = metadataArray.findIndex(item => 
-        item.name === newMetadataEntry.name
+        item.sha === hash
     );
 
     if (existingIndex !== -1) {
@@ -260,14 +277,15 @@ async function main() {
         const { name } = path.parse(workingImagePath);
         const normalizedName = normalizeDashes(name);
         
-        // Create images directory if it doesn't exist
+        // Create images/steggy directory if it doesn't exist
         const imagesDir = path.join(__dirname, 'images');
-        if (!fs.existsSync(imagesDir)) {
-            fs.mkdirSync(imagesDir, { recursive: true });
+        const steggyDir = path.join(imagesDir, 'steggy');
+        if (!fs.existsSync(steggyDir)) {
+            fs.mkdirSync(steggyDir, { recursive: true });
         }
         
-        // Create the output path in images directory with "_steggy" appended to the filename
-        const imageOutputPath = path.join(imagesDir, `${normalizedName}_steggy.png`);
+        // Create the output path in images/steggy directory with "_steggy" appended to the filename
+        const imageOutputPath = path.join(steggyDir, `${normalizedName}_steggy.png`);
 
         // Parse filename for metadata (using original filename to maintain naming convention)
         const parsedFile = parseFilename(originalImagePath);
@@ -368,7 +386,7 @@ async function main() {
         const hash = generateStringHash(uris.base64Uri);
 
         // Update JSON files
-        const { urihexPath, metadataPath } = updateJsonFiles(
+        const result = await updateJsonFiles(
             imageOutputPath,
             uris,
             hash,
@@ -376,6 +394,13 @@ async function main() {
             stats,
             isHonorary
         );
+        
+        // Check if operation was cancelled
+        if (result && result.cancelled) {
+            return;
+        }
+        
+        const { urihexPath, metadataPath } = result;
 
         console.log('Processing complete:');
         console.log('- Original image:', originalImagePath);

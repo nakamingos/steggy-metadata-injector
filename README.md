@@ -59,17 +59,18 @@ npm run inject
 5. If manual: prompts for exact values for Power/Strength, Speed/Agility, and Wisdom/Magic
 6. Prompts whether this is an honorary (affects embedded data format)
 7. Embeds JSON metadata into the image using steganography
-8. Creates an optimized PNG with `_steggy` suffix
+8. Creates an optimized PNG with `_steggy` suffix in `images/steggy/` directory
 9. Creates Data URIs in both base64 and hexadecimal formats
 10. Generates SHA-256 hash of the base64 Data URI
-11. Updates `metadata.json` and `URIHEXSHA.json` files
+11. **Checks for duplicate SHA**: Warns if already exists and asks to replace
+12. Updates `metadata.json` and `URIHEXSHA.json` files (preserves index on replacement)
 
 **File Naming Convention:**
 - Images should include `#N` in the filename (e.g., `Character Name #42.png`)
 - En-dashes (–) are automatically normalized to hyphens (-)
 
 **Output Files:**
-- `images/[filename]_steggy.png`: Image with embedded metadata (saved in images/ directory)
+- `images/steggy/[filename]_steggy.png`: Image with embedded metadata (saved in images/steggy/ directory)
 - `metadata/metadata.json`: Collection metadata with traits and stats
 - `metadata/URIHEXSHA.json`: Data URIs, hex URIs, and SHA-256 hashes for each processed image
 
@@ -92,7 +93,23 @@ npm run reveal
 - **Data URI**: `data:image/png;base64,iVBORw0KG...`
 - **Hex String**: `0x646174613a696d6167...`
 
-The tool will automatically detect the input type and extract the embedded JSON data.
+**What it does:**
+1. Prompts for input (file path, Data URI, or hex string)
+2. Extracts and displays the embedded JSON data
+3. Asks if you want to save the data to metadata files
+4. If yes:
+   - Converts input to Data URI format (if not already)
+   - Generates SHA-256 hash of the Data URI
+   - **If input is a file**: Copies the existing file directly to preserve quality
+   - **If input is Data URI/hex**: Decodes and saves as new PNG file
+   - Saves to `images/steggy/[SHA]_steggy.png`
+   - Auto-detects honorary vs non-honorary format from revealed data
+   - **If file input**: Extracts name from filename
+   - **If Data URI/hex input**: Prompts for name (or leaves empty)
+   - **Checks for duplicate SHA**: Warns if already exists and asks to replace
+   - Shows a preview of what will be added/replaced
+   - Asks for confirmation before updating files
+   - Updates `metadata.json` and `URIHEXSHA.json` with sorted entries (by index)
 
 ## Project Structure
 
@@ -102,6 +119,7 @@ steggy-metadata-injector/
 ├── imgRevealer.js          # Data extraction script
 ├── package.json            # Project dependencies
 ├── images/                 # Directory for processed images
+│   └── steggy/             # Steganography-encoded images
 └── metadata/               # Metadata output directory
     ├── metadata.json       # Collection metadata
     └── URIHEXSHA.json      # Data URI mappings with SHA hashes
@@ -244,35 +262,140 @@ Data embedded in images has two formats depending on whether it's an honorary:
 ```bash
 $ yarn inject
 Enter the path to your image file: ./images/Dragon #1.png
+Would you like to enter stats manually? (yes/no): no
 Enter stats range (min-max, or press Enter for default 1-99): 50-150
+Is this an honorary? (yes/no): no
 
 Processing complete:
 - Original image: ./images/Dragon #1.png
-- Steganography image saved to: ./images/Dragon #1_steggy.png
+- Steganography image saved to: ./images/steggy/Dragon #1_steggy.png
 - URIHEXSHA data saved to: ./metadata/URIHEXSHA.json
 - Metadata saved to: ./metadata/metadata.json
+```
+
+**Duplicate Detection Example:**
+
+```bash
+$ yarn inject
+Enter the path to your image file: ./images/Dragon #1.png
+Would you like to enter stats manually? (yes/no): no
+Enter stats range (min-max, or press Enter for default 1-99): 
+
+⚠️  Warning: This SHA already exists in the metadata!
+Existing entry:
+  Name: Dragon #1
+  Index: 1
+
+Do you want to replace the existing entry? (yes/no): yes
+✅ Entry replaced successfully!
 ```
 
 ### Revealing Metadata
 
 ```bash
 $ yarn reveal
-Enter your input (file path, data URI, or hex): ./images/Dragon #1_steggy.png
+Enter your input (file path, data URI, or hex): ./images/steggy/Dragon #1_steggy.png
 
+=== Revealed Data ===
 {"Dragon #1":"Dragon","Stats":[{"P/S":85},{"S/A":92},{"W/M":78}]}
+====================
+
+Save this data to metadata files? (y/n): y
+
+✓ Image copied to: /path/to/images/steggy/abc123.._steggy.png
+
+=== Data to be added ===
+
+Metadata entry:
+{
+  "id": "",
+  "index": 1,
+  "sha": "abc123...",
+  "name": "Dragon #1",
+  ...
+}
+
+URIHEXSHA entry:
+{
+  "Dragon #1.png": {
+    "index": 1,
+    "uri": "data:image/png;base64,...",
+    ...
+  }
+}
+
+Add this data to metadata files? (y/n): y
+
+✓ Successfully updated metadata files!
+  - /path/to/metadata/metadata.json
+  - /path/to/metadata/URIHEXSHA.json
+```
+
+**Revealer with Data URI/Hex Input:**
+
+```bash
+$ yarn reveal
+Enter your input (file path, data URI, or hex): data:image/png;base64,iVBORw0KG...
+
+=== Revealed Data ===
+{"Notable":{"Category":"Dragon","Type":"Fire"},"Stats":[{"P/S":85},{"S/A":92},{"W/M":78}]}
+====================
+
+Save this data to metadata files? (y/n): y
+Enter a name for this (or press Enter to leave empty): Fire Dragon #5
+
+✓ Image decoded and saved to: /path/to/images/steggy/def456.._steggy.png
+
+[Preview and confirmation prompts...]
+
+✓ Successfully updated metadata files!
+```
+
+**Duplicate Detection in Revealer:**
+
+```bash
+$ yarn reveal
+Enter your input (file path, data URI, or hex): ./images/steggy/Dragon #1_steggy.png
+
+=== Revealed Data ===
+[...]
+
+Save this data to metadata files? (y/n): y
+
+⚠️  Warning: This SHA already exists in the metadata!
+Existing entry:
+  Name: Dragon #1
+  Index: 1
+
+Do you want to replace the existing entry? (yes/no): no
+Operation cancelled.
+```
+  - /path/to/metadata/URIHEXSHA.json
 ```
 
 ## Notes
 
-- The injector automatically handles dash normalization (en-dash → hyphen)
-- Stats can be entered manually or generated randomly
-- For random stats, range is fully customizable (default: 1-99)
+- **Duplicate Prevention**: Both injector and revealer check SHA-256 hashes to prevent duplicate entries
+  - SHA is calculated from the base64 Data URI (not file hash)
+  - Warns when duplicate detected and asks to replace or cancel
+  - Replacing an entry preserves the original index number
+- **File Quality**: Revealer preserves image quality by copying file directly when input is a file path
+  - Only decodes Data URI/hex strings to PNG files
+- **Stats Flexibility**: Stats can be entered manually or generated randomly
+  - For random: range is fully customizable (default: 1-99)
   - Supports any integer range including negative values
   - Format: `min-max` (e.g., `1-99`, `-45-4839`, `50-150`)
-- Manual stat entry accepts any integer value (including negatives)
-- Files are automatically sorted by their number (#N) in the filename
-- Converted images are cleaned up after processing
-- Original files are never modified
+  - Manual entry accepts any integer value (including negatives)
+- **Honorary Format**: The "Notable" trait category is only included for honorary entries
+- **Name Detection**: Revealer extracts name from filename when input is a file, or prompts for name when input is Data URI/hex
+- **File Organization**: 
+  - Processed images saved to `images/steggy/` directory
+  - Metadata files saved to `metadata/` directory
+- **Automatic Features**:
+  - Dash normalization (en-dash → hyphen)
+  - Files sorted by their number (#N) in filename
+  - Converted images cleaned up after processing
+  - Original files never modified
 
 ## License
 
