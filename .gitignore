@@ -1,0 +1,11 @@
+# Node modules
+node_modules/
+
+# Log files
+*.log
+
+# Images
+images/
+
+# Metadata
+metadata/
