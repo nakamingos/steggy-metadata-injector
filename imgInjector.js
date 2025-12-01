@@ -233,7 +233,8 @@ async function updateJsonFiles(filename, uris, hash, parsedFile, stats, isHonora
         index: metadataEntry.index,
         uri: uris.base64Uri,
         uri_hex: uris.hexUri,
-        sha: uriSha
+        sha: uriSha,
+        owner: ""
     };
 
     // Sort URIHEXSHA entries

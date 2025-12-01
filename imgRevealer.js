@@ -271,7 +271,8 @@ async function saveAndUpdateMetadata(input, dataUri, revealedData, isInputFile) 
         index: metadataEntry.index,
         uri: dataUri,
         uri_hex: hexUri,
-        sha: uriSha
+        sha: uriSha,
+        owner: ""
     };
     
     // Sort URIHEXSHA entries by index
