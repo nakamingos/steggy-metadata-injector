@@ -59,12 +59,10 @@ npm run inject
 5. If manual: prompts for exact values for Power/Strength, Speed/Agility, and Wisdom/Magic
 6. Prompts whether this is an honorary (affects embedded data format)
 7. Embeds JSON metadata into the image using steganography
-7. Embeds JSON metadata into the image using steganography
 8. Creates an optimized PNG with `_steggy` suffix
-9. Generates SHA-256 hash of the output image
-10. Creates Data URIs in both base64 and hexadecimal formats
-11. Generates SHA-256 hash of the base64 Data URI
-12. Updates `metadata.json` and `URIHEXSHA.json` files
+9. Creates Data URIs in both base64 and hexadecimal formats
+10. Generates SHA-256 hash of the base64 Data URI
+11. Updates `metadata.json` and `URIHEXSHA.json` files
 
 **File Naming Convention:**
 - Images should include `#N` in the filename (e.g., `Character Name #42.png`)
@@ -119,7 +117,7 @@ steggy-metadata-injector/
   {
     "id": "",
     "index": 0,
-    "sha": "sha256-hash-of-image",
+    "sha": "sha256-hash-of-base64-data-uri",
     "name": "Character Name #1",
     "description": "",
     "ethscription_number": "",
@@ -151,7 +149,7 @@ steggy-metadata-injector/
   {
     "id": "",
     "index": 0,
-    "sha": "sha256-hash-of-image",
+    "sha": "sha256-hash-of-base64-data-uri",
     "name": "Character Name #1",
     "description": "",
     "ethscription_number": "",

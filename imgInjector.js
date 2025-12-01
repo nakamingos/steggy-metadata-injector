@@ -365,7 +365,7 @@ async function main() {
 
         // Generate URI and hash
         const uris = imageToDataUri(imageOutputPath);
-        const hash = generateFileHash(imageOutputPath);
+        const hash = generateStringHash(uris.base64Uri);
 
         // Update JSON files
         const { urihexPath, metadataPath } = updateJsonFiles(
