@@ -289,7 +289,7 @@ async function saveAndUpdateMetadata(input, dataUri, revealedData, isInputFile) 
     console.log(`  - ${urihexshaPath}`);
 }
 
-async function revealData(input) {
+async function revealData(input, autoSave = null) {
     let buffer;
     let dataUri;
     let isInputFile = false;
@@ -322,10 +322,14 @@ async function revealData(input) {
     console.log(originalJSONData);
     console.log('====================\n');
     
-    // Ask if user wants to save to metadata
-    const shouldSave = await askQuestion('Save this data to metadata files? (y/n): ');
+    // Ask if user wants to save to metadata (only if not already decided in batch mode)
+    let shouldSave = autoSave;
+    if (autoSave === null) {
+        const saveResponse = await askQuestion('Save this data to metadata files? (y/n): ');
+        shouldSave = saveResponse.trim().toLowerCase() === 'y';
+    }
     
-    if (shouldSave.trim().toLowerCase() === 'y') {
+    if (shouldSave) {
         await saveAndUpdateMetadata(input, dataUri, revealedData, isInputFile);
     } else {
         console.log('Data revealed but not saved to metadata files.');
@@ -336,14 +340,66 @@ async function revealData(input) {
 async function main() {
     try {
         const input = await askQuestion(
-            'Enter your input (file path, data URI, or hex): '
+            'Enter your input (file path, directory, data URI, or hex): '
         );
 
         if (!input) {
             throw new Error('No input provided');
         }
 
-        await revealData(input.trim());
+        const trimmedInput = input.trim();
+        
+        // Check if input is a file path or directory
+        if (fs.existsSync(trimmedInput)) {
+            const pathStats = fs.statSync(trimmedInput);
+            
+            if (pathStats.isDirectory()) {
+                // Process directory
+                const files = fs.readdirSync(trimmedInput);
+                const imageFiles = files.filter(file => {
+                    const ext = path.extname(file).toLowerCase();
+                    return ['.png', '.jpg', '.jpeg', '.webp', '.tiff', '.bmp'].includes(ext);
+                });
+                
+                if (imageFiles.length === 0) {
+                    throw new Error('No image files found in directory');
+                }
+                
+                console.log(`\n✓ Found ${imageFiles.length} image(s) to process\n`);
+                
+                // Ask once if user wants to save all
+                const shouldSave = await askQuestion('Save all revealed data to metadata files? (y/n): ');
+                const saveAll = shouldSave.trim().toLowerCase() === 'y';
+                
+                let successCount = 0;
+                let failCount = 0;
+                
+                for (const file of imageFiles) {
+                    const filePath = path.join(trimmedInput, file);
+                    console.log(`\n--- Processing: ${file} ---`);
+                    
+                    try {
+                        await revealData(filePath, saveAll);
+                        successCount++;
+                    } catch (err) {
+                        console.error(`✗ Failed to process ${file}: ${err.message}`);
+                        failCount++;
+                    }
+                }
+                
+                console.log('\n=== Processing Complete ===');
+                console.log(`✓ Successfully processed: ${successCount}`);
+                if (failCount > 0) {
+                    console.log(`✗ Failed: ${failCount}`);
+                }
+            } else {
+                // Single file
+                await revealData(trimmedInput);
+            }
+        } else {
+            // Data URI or hex string
+            await revealData(trimmedInput);
+        }
     } catch (error) {
         console.error('Error:', error.message);
     } finally {

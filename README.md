@@ -39,7 +39,7 @@ npm install
 
 ### Injecting Metadata into Images
 
-Process an image and embed metadata:
+Process a single image or an entire directory:
 
 ```bash
 yarn inject
@@ -52,18 +52,19 @@ npm run inject
 ```
 
 **What it does:**
-1. Prompts for an image file path
-2. Converts the image to PNG if necessary (supports JPEG, WebP, TIFF, BMP)
-3. Asks whether to enter stats manually or generate randomly
-4. If random: prompts for a stats range (default: 1-99, supports any range including negative values)
-5. If manual: prompts for exact values for Power/Strength, Speed/Agility, and Wisdom/Magic
-6. Prompts whether this is an honorary (affects embedded data format)
-7. Embeds JSON metadata into the image using steganography
-8. Creates an optimized PNG with `_steggy` suffix in `images/steggy/` directory
-9. Creates Data URIs in both base64 and hexadecimal formats
-10. Generates SHA-256 hash of the base64 Data URI
-11. **Checks for duplicate SHA**: Warns if already exists and asks to replace
-12. Updates `metadata.json` and `URIHEXSHA.json` files (preserves index on replacement)
+1. Prompts for an image file path or directory path
+2. If directory: processes all supported images (non-recursive)
+3. Converts images to PNG if necessary (supports JPEG, WebP, TIFF, BMP)
+4. Asks whether to enter stats manually or generate randomly (applies to all images)
+5. If random: prompts for a stats range (default: 1-99, supports any range including negative values)
+6. If manual: prompts for exact values for Power/Strength, Speed/Agility, and Wisdom/Magic
+7. Prompts whether this is an honorary (affects embedded data format, applies to all images)
+8. Embeds JSON metadata into each image using steganography
+9. Creates optimized PNGs with `_steggy` suffix in `images/steggy/` directory
+10. Creates Data URIs in both base64 and hexadecimal formats
+11. Generates SHA-256 hash of the base64 Data URI for each image
+12. **Checks for duplicate SHA**: Warns if already exists and asks to replace
+13. Updates `metadata.json` and `URIHEXSHA.json` files (preserves index on replacement)
 
 **File Naming Convention:**
 - Images should include `#N` in the filename (e.g., `Character Name #42.png`)
@@ -76,7 +77,7 @@ npm run inject
 
 ### Revealing Hidden Metadata
 
-Extract embedded data from various sources:
+Extract embedded data from a single image, directory, or data URI:
 
 ```bash
 yarn reveal
@@ -90,14 +91,16 @@ npm run reveal
 
 **Supported Input Types:**
 - **File Path**: Path to a steganography-encoded image
+- **Directory Path**: Process all images in a directory (non-recursive)
 - **Data URI**: `data:image/png;base64,iVBORw0KG...`
 - **Hex String**: `0x646174613a696d6167...`
 
 **What it does:**
-1. Prompts for input (file path, Data URI, or hex string)
-2. Extracts and displays the embedded JSON data
-3. Asks if you want to save the data to metadata files
-4. If yes:
+1. Prompts for input (file path, directory, Data URI, or hex string)
+2. If directory: processes all images and asks once if you want to save all
+3. Extracts and displays the embedded JSON data from each image
+4. Asks if you want to save the data to metadata files
+5. If yes:
    - Converts input to Data URI format (if not already)
    - Generates SHA-256 hash of the Data URI
    - **If input is a file**: Copies the existing file directly to preserve quality
@@ -259,26 +262,53 @@ Data embedded in images has two formats depending on whether it's an honorary:
 
 ### Injecting Metadata
 
+**Single File:**
+
 ```bash
 $ yarn inject
-Enter the path to your image file: ./images/Dragon #1.png
-Would you like to enter stats manually? (yes/no): no
+Enter the path to your image file or directory: ./images/Dragon #1.png
+Enter stats manually? (y/n, or press Enter for random): n
 Enter stats range (min-max, or press Enter for default 1-99): 50-150
-Is this an honorary? (yes/no): no
+Is this an honorary? (y/n): n
 
-Processing complete:
-- Original image: ./images/Dragon #1.png
-- Steganography image saved to: ./images/steggy/Dragon #1_steggy.png
-- URIHEXSHA data saved to: ./metadata/URIHEXSHA.json
-- Metadata saved to: ./metadata/metadata.json
+✓ Processed: Dragon #1
+
+=== Processing Complete ===
+✓ Successfully processed: 1
+- Steganography images saved to: /path/to/images/steggy
+- URIHEXSHA data saved to: /path/to/metadata/URIHEXSHA.json
+- Metadata saved to: /path/to/metadata/metadata.json
+```
+
+**Directory:**
+
+```bash
+$ yarn inject
+Enter the path to your image file or directory: ./images
+✓ Found 15 image(s) to process
+
+Enter stats manually? (y/n, or press Enter for random): n
+Enter stats range (min-max, or press Enter for default 1-99): 
+Is this an honorary? (y/n): n
+
+✓ Processed: Nakamingo #2843
+✓ Processed: Nakamingo #5113
+✓ Processed: Nakamingo #6300
+...
+
+=== Processing Complete ===
+✓ Successfully processed: 15
+- Steganography images saved to: /path/to/images/steggy
+- URIHEXSHA data saved to: /path/to/metadata/URIHEXSHA.json
+- Metadata saved to: /path/to/metadata/metadata.json
 ```
 
 **Duplicate Detection Example:**
 
 ```bash
 $ yarn inject
-Enter the path to your image file: ./images/Dragon #1.png
-Would you like to enter stats manually? (yes/no): no
+Enter the path to your image file or directory: ./images/Dragon #1.png
+Enter stats manually? (y/n, or press Enter for random): n
 Enter stats range (min-max, or press Enter for default 1-99): 
 
 ⚠️  Warning: This SHA already exists in the metadata!
@@ -292,9 +322,11 @@ Do you want to replace the existing entry? (yes/no): yes
 
 ### Revealing Metadata
 
+**Single File:**
+
 ```bash
 $ yarn reveal
-Enter your input (file path, data URI, or hex): ./images/steggy/Dragon #1_steggy.png
+Enter your input (file path, directory, data URI, or hex): ./images/steggy/Dragon #1_steggy.png
 
 === Revealed Data ===
 {"Dragon #1":"Dragon","Stats":[{"P/S":85},{"S/A":92},{"W/M":78}]}
@@ -331,11 +363,37 @@ Add this data to metadata files? (y/n): y
   - /path/to/metadata/URIHEXSHA.json
 ```
 
+**Directory Processing:**
+
+```bash
+$ yarn reveal
+Enter your input (file path, directory, data URI, or hex): ./images/steggy
+
+✓ Found 15 image(s) to process
+
+Save all revealed data to metadata files? (y/n): y
+
+--- Processing: Dragon #1_steggy.png ---
+
+=== Revealed Data ===
+[{"P/S":85},{"S/A":92},{"W/M":78}]
+====================
+
+✓ Image copied to: /path/to/images/steggy/abc123.._steggy.png
+✓ Processed: Dragon #1
+
+--- Processing: Dragon #2_steggy.png ---
+...
+
+=== Processing Complete ===
+✓ Successfully processed: 15
+```
+
 **Revealer with Data URI/Hex Input:**
 
 ```bash
 $ yarn reveal
-Enter your input (file path, data URI, or hex): data:image/png;base64,iVBORw0KG...
+Enter your input (file path, directory, data URI, or hex): data:image/png;base64,iVBORw0KG...
 
 === Revealed Data ===
 {"Notable":{"Category":"Dragon","Type":"Fire"},"Stats":[{"P/S":85},{"S/A":92},{"W/M":78}]}
@@ -355,7 +413,7 @@ Enter a name for this (or press Enter to leave empty): Fire Dragon #5
 
 ```bash
 $ yarn reveal
-Enter your input (file path, data URI, or hex): ./images/steggy/Dragon #1_steggy.png
+Enter your input (file path, directory, data URI, or hex): ./images/steggy/Dragon #1_steggy.png
 
 === Revealed Data ===
 [...]
@@ -370,11 +428,13 @@ Existing entry:
 Do you want to replace the existing entry? (yes/no): no
 Operation cancelled.
 ```
-  - /path/to/metadata/URIHEXSHA.json
-```
 
 ## Notes
 
+- **Batch Processing**: Both scripts support processing entire directories
+  - Processes all images in the directory (non-recursive)
+  - Stats and honorary settings apply to all images in the batch
+  - Shows summary of successful and failed operations
 - **Duplicate Prevention**: Both injector and revealer check SHA-256 hashes to prevent duplicate entries
   - SHA is calculated from the base64 Data URI (not file hash)
   - Warns when duplicate detected and asks to replace or cancel

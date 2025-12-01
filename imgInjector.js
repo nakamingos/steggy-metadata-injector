@@ -257,38 +257,125 @@ async function updateJsonFiles(filename, uris, hash, parsedFile, stats, isHonora
 }
 
 // Main async function to handle the process
+// Function to process a single image
+async function processImage(originalImagePath, stats, isHonorary) {
+    if (!isSupportedImage(originalImagePath)) {
+        console.error(`⚠️  Skipping ${path.basename(originalImagePath)}: Unsupported format`);
+        return false;
+    }
+
+    // Convert to PNG if needed and get the working path
+    const workingImagePath = await ensurePNG(originalImagePath);
+
+    // Get filename without extension for the final steggy output
+    const { name } = path.parse(workingImagePath);
+    const normalizedName = normalizeDashes(name);
+    
+    // Create images/steggy directory if it doesn't exist
+    const imagesDir = path.join(__dirname, 'images');
+    const steggyDir = path.join(imagesDir, 'steggy');
+    if (!fs.existsSync(steggyDir)) {
+        fs.mkdirSync(steggyDir, { recursive: true });
+    }
+    
+    // Create the output path in images/steggy directory with "_steggy" appended to the filename
+    const imageOutputPath = path.join(steggyDir, `${normalizedName}_steggy.png`);
+
+    // Parse filename for metadata (using original filename to maintain naming convention)
+    const parsedFile = parseFilename(originalImagePath);
+
+    // Process image with compression before steganography
+    const rawBuffer = fs.readFileSync(workingImagePath);
+    const workingImageBuffer = await sharp(rawBuffer)
+        .png({
+            compressionLevel: 9,
+            adaptiveFiltering: true,
+            force: true
+        })
+        .toBuffer();
+
+    let embeddedData;
+    if (isHonorary) {
+        // Honorary format: includes name and trait
+        embeddedData = {
+            [parsedFile.fullName]: normalizeDashes(parsedFile.fullName.split('-').pop().trim()),
+            Stats: [{ "P/S": stats.power }, { "S/A": stats.speed }, { "W/M": stats.wisdom }]
+        };
+    } else {
+        // Non-honorary format: stats only
+        embeddedData = [
+            { "P/S": stats.power }, 
+            { "S/A": stats.speed }, 
+            { "W/M": stats.wisdom }
+        ];
+    }
+
+    const fileContent = Buffer.from(JSON.stringify(embeddedData));
+
+    // Embed data in image
+    const embeddedBuffer = steggy.conceal()(workingImageBuffer, fileContent);
+    fs.writeFileSync(imageOutputPath, embeddedBuffer);
+
+    // Clean up converted file if it was created
+    if (workingImagePath !== originalImagePath) {
+        fs.unlinkSync(workingImagePath);
+    }
+
+    // Generate URI and hash
+    const uris = imageToDataUri(imageOutputPath);
+    const hash = generateStringHash(uris.base64Uri);
+
+    // Update JSON files
+    const result = await updateJsonFiles(
+        imageOutputPath,
+        uris,
+        hash,
+        parsedFile,
+        stats,
+        isHonorary
+    );
+    
+    // Check if operation was cancelled
+    if (result && result.cancelled) {
+        return false;
+    }
+    
+    console.log(`✓ Processed: ${parsedFile.fullName}`);
+    return true;
+}
+
 async function main() {
     try {
         // Get image path from user
-        const originalImagePath = await askQuestion('Enter the path to your image file: ');
+        const inputPath = await askQuestion('Enter the path to your image file or directory: ');
+        const resolvedPath = path.resolve(inputPath.trim());
 
-        if (!fs.existsSync(originalImagePath)) {
-            throw new Error('File does not exist');
+        if (!fs.existsSync(resolvedPath)) {
+            throw new Error('Path does not exist');
         }
 
-        if (!isSupportedImage(originalImagePath)) {
-            throw new Error(`Unsupported image format. Supported formats: ${SUPPORTED_FORMATS.join(', ')}`);
+        const pathStats = fs.statSync(resolvedPath);
+        let imagePaths = [];
+
+        if (pathStats.isDirectory()) {
+            // Read directory and filter for image files (non-recursive)
+            const files = fs.readdirSync(resolvedPath);
+            imagePaths = files
+                .filter(file => isSupportedImage(file))
+                .map(file => path.join(resolvedPath, file));
+            
+            if (imagePaths.length === 0) {
+                throw new Error('No supported image files found in directory');
+            }
+            
+            console.log(`\n✓ Found ${imagePaths.length} image(s) to process\n`);
+        } else {
+            // Single file
+            if (!isSupportedImage(resolvedPath)) {
+                throw new Error(`Unsupported image format. Supported formats: ${SUPPORTED_FORMATS.join(', ')}`);
+            }
+            imagePaths = [resolvedPath];
         }
-
-        // Convert to PNG if needed and get the working path
-        const workingImagePath = await ensurePNG(originalImagePath);
-
-        // Get filename without extension for the final steggy output
-        const { name } = path.parse(workingImagePath);
-        const normalizedName = normalizeDashes(name);
-        
-        // Create images/steggy directory if it doesn't exist
-        const imagesDir = path.join(__dirname, 'images');
-        const steggyDir = path.join(imagesDir, 'steggy');
-        if (!fs.existsSync(steggyDir)) {
-            fs.mkdirSync(steggyDir, { recursive: true });
-        }
-        
-        // Create the output path in images/steggy directory with "_steggy" appended to the filename
-        const imageOutputPath = path.join(steggyDir, `${normalizedName}_steggy.png`);
-
-        // Parse filename for metadata (using original filename to maintain naming convention)
-        const parsedFile = parseFilename(originalImagePath);
 
         // Ask if user wants to enter stats manually
         const manualEntry = await askQuestion('Enter stats manually? (y/n, or press Enter for random): ');
@@ -344,69 +431,27 @@ async function main() {
         const isHonoraryInput = await askQuestion('Is this an honorary? (y/n): ');
         const isHonorary = isHonoraryInput.trim().toLowerCase() === 'y';
 
-        // Process image with compression before steganography
-        const rawBuffer = fs.readFileSync(workingImagePath);
-        const workingImageBuffer = await sharp(rawBuffer)
-            .png({
-                compressionLevel: 9,
-                adaptiveFiltering: true,
-                force: true
-            })
-            .toBuffer();
+        // Process all images
+        let successCount = 0;
+        let failCount = 0;
 
-        let embeddedData;
-        if (isHonorary) {
-            // Honorary format: includes name and trait
-            embeddedData = {
-                [parsedFile.fullName]: normalizeDashes(parsedFile.fullName.split('-').pop().trim()),
-                Stats: [{ "P/S": stats.power }, { "S/A": stats.speed }, { "W/M": stats.wisdom }]
-            };
-        } else {
-            // Non-honorary format: stats only
-            embeddedData = [
-                { "P/S": stats.power }, 
-                { "S/A": stats.speed }, 
-                { "W/M": stats.wisdom }
-            ];
+        for (const imagePath of imagePaths) {
+            const success = await processImage(imagePath, stats, isHonorary);
+            if (success) {
+                successCount++;
+            } else {
+                failCount++;
+            }
         }
 
-        const fileContent = Buffer.from(JSON.stringify(embeddedData));
-
-        // Embed data in image
-        const embeddedBuffer = steggy.conceal()(workingImageBuffer, fileContent);
-        fs.writeFileSync(imageOutputPath, embeddedBuffer);
-
-        // Clean up converted file if it was created
-        if (workingImagePath !== originalImagePath) {
-            fs.unlinkSync(workingImagePath);
+        console.log('\n=== Processing Complete ===');
+        console.log(`✓ Successfully processed: ${successCount}`);
+        if (failCount > 0) {
+            console.log(`✗ Failed/Skipped: ${failCount}`);
         }
-
-        // Generate URI and hash
-        const uris = imageToDataUri(imageOutputPath);
-        const hash = generateStringHash(uris.base64Uri);
-
-        // Update JSON files
-        const result = await updateJsonFiles(
-            imageOutputPath,
-            uris,
-            hash,
-            parsedFile,
-            stats,
-            isHonorary
-        );
-        
-        // Check if operation was cancelled
-        if (result && result.cancelled) {
-            return;
-        }
-        
-        const { urihexPath, metadataPath } = result;
-
-        console.log('Processing complete:');
-        console.log('- Original image:', originalImagePath);
-        console.log('- Steganography image saved to:', imageOutputPath);
-        console.log('- URIHEX data saved to:', urihexPath);
-        console.log('- Metadata saved to:', metadataPath);
+        console.log(`- Steganography images saved to: ${path.join(__dirname, 'images', 'steggy')}`);
+        console.log(`- URIHEXSHA data saved to: ${path.join(__dirname, 'metadata', 'URIHEXSHA.json')}`);
+        console.log(`- Metadata saved to: ${path.join(__dirname, 'metadata', 'metadata.json')}`);
 
     } catch (error) {
         console.error('Error:', error.message);
