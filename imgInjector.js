@@ -314,6 +314,10 @@ async function main() {
             };
         }
 
+        // Prompt for honorary status
+        const isHonoraryInput = await askQuestion('Is this an honorary? (y/n): ');
+        const isHonorary = isHonoraryInput.trim().toLowerCase() === 'y';
+
         // Process image with compression before steganography
         const rawBuffer = fs.readFileSync(workingImagePath);
         const workingImageBuffer = await sharp(rawBuffer)
@@ -324,10 +328,23 @@ async function main() {
             })
             .toBuffer();
 
-        const fileContent = Buffer.from(JSON.stringify({
-            [parsedFile.fullName]: normalizeDashes(parsedFile.fullName.split('-').pop().trim()),
-            Stats: [{ "P/S": stats.power }, { "S/A": stats.speed }, { "W/M": stats.wisdom }]
-        }));
+        let embeddedData;
+        if (isHonorary) {
+            // Honorary format: includes name and trait
+            embeddedData = {
+                [parsedFile.fullName]: normalizeDashes(parsedFile.fullName.split('-').pop().trim()),
+                Stats: [{ "P/S": stats.power }, { "S/A": stats.speed }, { "W/M": stats.wisdom }]
+            };
+        } else {
+            // Non-honorary format: stats only
+            embeddedData = [
+                { "P/S": stats.power }, 
+                { "S/A": stats.speed }, 
+                { "W/M": stats.wisdom }
+            ];
+        }
+
+        const fileContent = Buffer.from(JSON.stringify(embeddedData));
 
         // Embed data in image
         const embeddedBuffer = steggy.conceal()(workingImageBuffer, fileContent);

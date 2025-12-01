@@ -56,12 +56,14 @@ npm run inject
 2. Converts the image to PNG if necessary (supports JPEG, WebP, TIFF, BMP)
 3. Prompts for a stats range (default: 1-99, supports any range including negative values)
 4. If using default range, offers option to manually enter exact stat values
-5. Generates random stats (Power/Strength, Speed/Agility, Wisdom/Magic) within the specified range, or uses manual values
-6. Embeds JSON metadata into the image using steganography
-7. Creates an optimized PNG with `_steggy` suffix
-8. Generates SHA-256 hash of the output image
-9. Creates Data URIs in both base64 and hexadecimal formats
-10. Updates `metadata.json` and `URIHEX.json` files
+5. Prompts whether this is an honorary (affects embedded data format)
+6. Generates random stats (Power/Strength, Speed/Agility, Wisdom/Magic) within the specified range, or uses manual values
+7. Embeds JSON metadata into the image using steganography
+7. Embeds JSON metadata into the image using steganography
+8. Creates an optimized PNG with `_steggy` suffix
+9. Generates SHA-256 hash of the output image
+10. Creates Data URIs in both base64 and hexadecimal formats
+11. Updates `metadata.json` and `URIHEX.json` files
 
 **File Naming Convention:**
 - Images should include `#N` in the filename (e.g., `Character Name #42.png`)
@@ -155,8 +157,9 @@ steggy-metadata-injector/
 
 ## Embedded Data Format
 
-Data embedded in images follows this structure:
+Data embedded in images has two formats depending on whether it's an honorary:
 
+**Honorary format:**
 ```json
 {
   "Character Name #1": "Notable Trait",
@@ -166,6 +169,15 @@ Data embedded in images follows this structure:
     { "W/M": 78 }
   ]
 }
+```
+
+**Non-honorary format:**
+```json
+[
+  { "P/S": 41 },
+  { "S/A": 84 },
+  { "W/M": 45 }
+]
 ```
 
 ## Supported Image Formats
