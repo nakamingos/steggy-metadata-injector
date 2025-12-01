@@ -253,10 +253,11 @@ async function main() {
         const parsedFile = parseFilename(originalImagePath);
 
         // Prompt for stats range
-        const statsRangeInput = await askQuestion('Enter stats range (min-max, or press Enter for default 0-100): ');
+        const statsRangeInput = await askQuestion('Enter stats range (min-max, or press Enter for default 1-99): ');
         
-        let minStat = 0;
-        let maxStat = 100;
+        let minStat = 1;
+        let maxStat = 99;
+        let useDefaultRange = false;
         
         if (statsRangeInput.trim()) {
             const rangeMatch = statsRangeInput.trim().match(/^(-?\d+)-(-?\d+)$/);
@@ -268,17 +269,50 @@ async function main() {
                     throw new Error('Minimum value must be less than maximum value');
                 }
             } else {
-                throw new Error('Invalid range format. Use format: min-max (e.g., 0-100 or -45-4839)');
+                throw new Error('Invalid range format. Use format: min-max (e.g., 1-99 or -45-4839)');
             }
+        } else {
+            useDefaultRange = true;
         }
 
-        // Generate random stats within the specified range
-        const range = maxStat - minStat;
-        const stats = {
-            power: Math.floor(Math.random() * (range + 1)) + minStat,
-            speed: Math.floor(Math.random() * (range + 1)) + minStat,
-            wisdom: Math.floor(Math.random() * (range + 1)) + minStat
-        };
+        let stats;
+        
+        // If using default range, offer manual stat entry
+        if (useDefaultRange) {
+            const manualEntry = await askQuestion('Enter stats manually? (y/n, or press Enter for random): ');
+            
+            if (manualEntry.trim().toLowerCase() === 'y') {
+                const powerInput = await askQuestion('Enter Power/Strength value: ');
+                const speedInput = await askQuestion('Enter Speed/Agility value: ');
+                const wisdomInput = await askQuestion('Enter Wisdom/Magic value: ');
+                
+                const power = parseInt(powerInput.trim());
+                const speed = parseInt(speedInput.trim());
+                const wisdom = parseInt(wisdomInput.trim());
+                
+                if (isNaN(power) || isNaN(speed) || isNaN(wisdom)) {
+                    throw new Error('All stat values must be valid integers');
+                }
+                
+                stats = { power, speed, wisdom };
+            } else {
+                // Generate random stats within the default range
+                const range = maxStat - minStat;
+                stats = {
+                    power: Math.floor(Math.random() * (range + 1)) + minStat,
+                    speed: Math.floor(Math.random() * (range + 1)) + minStat,
+                    wisdom: Math.floor(Math.random() * (range + 1)) + minStat
+                };
+            }
+        } else {
+            // Generate random stats within the specified range
+            const range = maxStat - minStat;
+            stats = {
+                power: Math.floor(Math.random() * (range + 1)) + minStat,
+                speed: Math.floor(Math.random() * (range + 1)) + minStat,
+                wisdom: Math.floor(Math.random() * (range + 1)) + minStat
+            };
+        }
 
         // Process image with compression before steganography
         const rawBuffer = fs.readFileSync(workingImagePath);

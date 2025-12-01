@@ -54,13 +54,14 @@ npm run inject
 **What it does:**
 1. Prompts for an image file path
 2. Converts the image to PNG if necessary (supports JPEG, WebP, TIFF, BMP)
-3. Prompts for a stats range (default: 0-100, supports any range including negative values)
-4. Generates random stats (Power/Strength, Speed/Agility, Wisdom/Magic) within the specified range
-5. Embeds JSON metadata into the image using steganography
-6. Creates an optimized PNG with `_steggy` suffix
-7. Generates SHA-256 hash of the output image
-8. Creates Data URIs in both base64 and hexadecimal formats
-9. Updates `metadata.json` and `URIHEX.json` files
+3. Prompts for a stats range (default: 1-99, supports any range including negative values)
+4. If using default range, offers option to manually enter exact stat values
+5. Generates random stats (Power/Strength, Speed/Agility, Wisdom/Magic) within the specified range, or uses manual values
+6. Embeds JSON metadata into the image using steganography
+7. Creates an optimized PNG with `_steggy` suffix
+8. Generates SHA-256 hash of the output image
+9. Creates Data URIs in both base64 and hexadecimal formats
+10. Updates `metadata.json` and `URIHEX.json` files
 
 **File Naming Convention:**
 - Images should include `#N` in the filename (e.g., `Character Name #42.png`)
@@ -202,7 +203,7 @@ Data embedded in images follows this structure:
 ```bash
 $ yarn inject
 Enter the path to your image file: ./images/Dragon #1.png
-Enter stats range (min-max, or press Enter for default 0-100): 50-150
+Enter stats range (min-max, or press Enter for default 1-99): 50-150
 
 Processing complete:
 - Original image: ./images/Dragon #1.png
@@ -223,10 +224,11 @@ Enter your input (file path, data URI, or hex): ./images/Dragon #1_steggy.png
 ## Notes
 
 - The injector automatically handles dash normalization (en-dash → hyphen)
-- Stats range is fully customizable (default: 0-100)
+- Stats range is fully customizable (default: 1-99)
   - Supports any integer range including negative values
-  - Format: `min-max` (e.g., `0-100`, `-45-4839`, `50-150`)
-- Stats are randomly generated within the specified range for each attribute
+  - Format: `min-max` (e.g., `1-99`, `-45-4839`, `50-150`)
+- When using default range, you can choose to manually enter exact values for each stat
+- Stats are randomly generated within the specified range for each attribute (unless manually entered)
 - Files are automatically sorted by their number (#N) in the filename
 - Converted images are cleaned up after processing
 - Original files are never modified
