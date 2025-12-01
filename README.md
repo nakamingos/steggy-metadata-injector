@@ -54,16 +54,17 @@ npm run inject
 **What it does:**
 1. Prompts for an image file path
 2. Converts the image to PNG if necessary (supports JPEG, WebP, TIFF, BMP)
-3. Prompts for a stats range (default: 1-99, supports any range including negative values)
-4. If using default range, offers option to manually enter exact stat values
-5. Prompts whether this is an honorary (affects embedded data format)
-6. Generates random stats (Power/Strength, Speed/Agility, Wisdom/Magic) within the specified range, or uses manual values
+3. Asks whether to enter stats manually or generate randomly
+4. If random: prompts for a stats range (default: 1-99, supports any range including negative values)
+5. If manual: prompts for exact values for Power/Strength, Speed/Agility, and Wisdom/Magic
+6. Prompts whether this is an honorary (affects embedded data format)
 7. Embeds JSON metadata into the image using steganography
 7. Embeds JSON metadata into the image using steganography
 8. Creates an optimized PNG with `_steggy` suffix
 9. Generates SHA-256 hash of the output image
 10. Creates Data URIs in both base64 and hexadecimal formats
-11. Updates `metadata.json` and `URIHEX.json` files
+11. Generates SHA-256 hash of the base64 Data URI
+12. Updates `metadata.json` and `URIHEXSHA.json` files
 
 **File Naming Convention:**
 - Images should include `#N` in the filename (e.g., `Character Name #42.png`)
@@ -72,7 +73,7 @@ npm run inject
 **Output Files:**
 - `images/[filename]_steggy.png`: Image with embedded metadata (saved in images/ directory)
 - `metadata/metadata.json`: Collection metadata with traits and stats
-- `metadata/URIHEX.json`: Data URIs for each processed image
+- `metadata/URIHEXSHA.json`: Data URIs, hex URIs, and SHA-256 hashes for each processed image
 
 ### Revealing Hidden Metadata
 
@@ -105,13 +106,14 @@ steggy-metadata-injector/
 ├── images/                 # Directory for processed images
 └── metadata/               # Metadata output directory
     ├── metadata.json       # Collection metadata
-    └── URIHEX.json         # Data URI mappings
+    └── URIHEXSHA.json      # Data URI mappings with SHA hashes
 ```
 
 ## Metadata Format
 
 ### metadata.json Structure
 
+**For honoraries:**
 ```json
 [
   {
@@ -143,14 +145,43 @@ steggy-metadata-injector/
 ]
 ```
 
-### URIHEX.json Structure
+**For non-honoraries:**
+```json
+[
+  {
+    "id": "",
+    "index": 0,
+    "sha": "sha256-hash-of-image",
+    "name": "Character Name #1",
+    "description": "",
+    "ethscription_number": "",
+    "attributes": [
+      {
+        "trait_type": "Power/Strength",
+        "value": 85
+      },
+      {
+        "trait_type": "Speed/Agility",
+        "value": 92
+      },
+      {
+        "trait_type": "Wisdom/Magic",
+        "value": 78
+      }
+    ]
+  }
+]
+```
+
+### URIHEXSHA.json Structure
 
 ```json
 {
   "Character Name #1.png": {
     "index": 0,
     "uri": "data:image/png;base64,...",
-    "uri_hex": "0x646174613a696d616765..."
+    "uri_hex": "0x646174613a696d616765...",
+    "sha": "sha256-hash-of-base64-uri"
   }
 }
 ```
@@ -220,7 +251,7 @@ Enter stats range (min-max, or press Enter for default 1-99): 50-150
 Processing complete:
 - Original image: ./images/Dragon #1.png
 - Steganography image saved to: ./images/Dragon #1_steggy.png
-- URIHEX data saved to: ./metadata/URIHEX.json
+- URIHEXSHA data saved to: ./metadata/URIHEXSHA.json
 - Metadata saved to: ./metadata/metadata.json
 ```
 
@@ -236,11 +267,11 @@ Enter your input (file path, data URI, or hex): ./images/Dragon #1_steggy.png
 ## Notes
 
 - The injector automatically handles dash normalization (en-dash → hyphen)
-- Stats range is fully customizable (default: 1-99)
+- Stats can be entered manually or generated randomly
+- For random stats, range is fully customizable (default: 1-99)
   - Supports any integer range including negative values
   - Format: `min-max` (e.g., `1-99`, `-45-4839`, `50-150`)
-- When using default range, you can choose to manually enter exact values for each stat
-- Stats are randomly generated within the specified range for each attribute (unless manually entered)
+- Manual stat entry accepts any integer value (including negatives)
 - Files are automatically sorted by their number (#N) in the filename
 - Converted images are cleaned up after processing
 - Original files are never modified

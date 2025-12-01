@@ -62,6 +62,13 @@ function generateFileHash(filePath) {
     return hashSum.digest('hex');
 }
 
+// Function to generate SHA-256 hash from a string
+function generateStringHash(str) {
+    const hashSum = crypto.createHash('sha256');
+    hashSum.update(str);
+    return hashSum.digest('hex');
+}
+
 // Function to convert image to Data URI and return both base64 and hex versions
 function imageToDataUri(filePath) {
     if (!fs.existsSync(filePath)) {
@@ -109,7 +116,7 @@ function parseFilename(filename) {
 }
 
 // Function to update both JSON files
-function updateJsonFiles(filename, uris, hash, parsedFile, stats) {
+function updateJsonFiles(filename, uris, hash, parsedFile, stats, isHonorary) {
     const metadataDir = path.join(__dirname, 'metadata');
     
     // Ensure metadata directory exists
@@ -117,7 +124,7 @@ function updateJsonFiles(filename, uris, hash, parsedFile, stats) {
         fs.mkdirSync(metadataDir, { recursive: true });
     }
     
-    const urihexPath = path.join(metadataDir, 'URIHEX.json');
+    const urihexPath = path.join(metadataDir, 'URIHEXSHA.json');
     const metadataPath = path.join(metadataDir, 'metadata.json');
     
     // Handle metadata.json first
@@ -128,6 +135,32 @@ function updateJsonFiles(filename, uris, hash, parsedFile, stats) {
     }
 
     // Create new metadata entry
+    const attributes = [];
+    
+    // Only add Notable trait for honoraries
+    if (isHonorary) {
+        attributes.push({
+            "trait_type": "Notable",
+            "value": normalizeDashes(parsedFile.fullName.split('-').pop().trim())
+        });
+    }
+    
+    // Add stat attributes
+    attributes.push(
+        {
+            "trait_type": "Power/Strength",
+            "value": stats.power
+        },
+        {
+            "trait_type": "Speed/Agility",
+            "value": stats.speed
+        },
+        {
+            "trait_type": "Wisdom/Magic",
+            "value": stats.wisdom
+        }
+    );
+    
     const newMetadataEntry = {
         id: "",
         index: 0, // Will be updated after sorting
@@ -135,24 +168,7 @@ function updateJsonFiles(filename, uris, hash, parsedFile, stats) {
         name: parsedFile.fullName,
         description: "",
         ethscription_number: "",
-        attributes: [
-            {
-                "trait_type": "Notable",
-                "value": normalizeDashes(parsedFile.fullName.split('-').pop().trim())
-            },
-            {
-                "trait_type": "Power/Strength",
-                "value": stats.power
-            },
-            {
-                "trait_type": "Speed/Agility",
-                "value": stats.speed
-            },
-            {
-                "trait_type": "Wisdom/Magic",
-                "value": stats.wisdom
-            }
-        ]
+        attributes: attributes
     };
 
     // Add or update metadata entry
@@ -179,7 +195,7 @@ function updateJsonFiles(filename, uris, hash, parsedFile, stats) {
         index: index
     }));
 
-    // Handle URIHEX.json
+    // Handle URIHEXSHA.json
     let urihexData = {};
     if (fs.existsSync(urihexPath)) {
         const fileContent = fs.readFileSync(urihexPath, 'utf8');
@@ -191,15 +207,19 @@ function updateJsonFiles(filename, uris, hash, parsedFile, stats) {
         item.name === parsedFile.fullName
     );
 
-    // Update URIHEX data with ID
+    // Generate SHA-256 hash of the base64 Data URI
+    const uriSha = generateStringHash(uris.base64Uri);
+
+    // Update URIHEXSHA data with ID, URIs, and SHA
     const normalizedFilename = normalizeDashes(path.basename(filename));
     urihexData[normalizedFilename] = {
         index: metadataEntry.index,
         uri: uris.base64Uri,
-        uri_hex: uris.hexUri
+        uri_hex: uris.hexUri,
+        sha: uriSha
     };
 
-    // Sort URIHEX entries
+    // Sort URIHEXSHA entries
     const sortedUrihexData = Object.fromEntries(
         Object.entries(urihexData)
             .sort(([filenameA], [filenameB]) => {
@@ -252,59 +272,47 @@ async function main() {
         // Parse filename for metadata (using original filename to maintain naming convention)
         const parsedFile = parseFilename(originalImagePath);
 
-        // Prompt for stats range
-        const statsRangeInput = await askQuestion('Enter stats range (min-max, or press Enter for default 1-99): ');
+        // Ask if user wants to enter stats manually
+        const manualEntry = await askQuestion('Enter stats manually? (y/n, or press Enter for random): ');
         
-        let minStat = 1;
-        let maxStat = 99;
-        let useDefaultRange = false;
-        
-        if (statsRangeInput.trim()) {
-            const rangeMatch = statsRangeInput.trim().match(/^(-?\d+)-(-?\d+)$/);
-            if (rangeMatch) {
-                minStat = parseInt(rangeMatch[1]);
-                maxStat = parseInt(rangeMatch[2]);
-                
-                if (minStat >= maxStat) {
-                    throw new Error('Minimum value must be less than maximum value');
-                }
-            } else {
-                throw new Error('Invalid range format. Use format: min-max (e.g., 1-99 or -45-4839)');
-            }
-        } else {
-            useDefaultRange = true;
-        }
-
         let stats;
         
-        // If using default range, offer manual stat entry
-        if (useDefaultRange) {
-            const manualEntry = await askQuestion('Enter stats manually? (y/n, or press Enter for random): ');
+        if (manualEntry.trim().toLowerCase() === 'y') {
+            // Manual stat entry
+            const powerInput = await askQuestion('Enter Power/Strength value: ');
+            const speedInput = await askQuestion('Enter Speed/Agility value: ');
+            const wisdomInput = await askQuestion('Enter Wisdom/Magic value: ');
             
-            if (manualEntry.trim().toLowerCase() === 'y') {
-                const powerInput = await askQuestion('Enter Power/Strength value: ');
-                const speedInput = await askQuestion('Enter Speed/Agility value: ');
-                const wisdomInput = await askQuestion('Enter Wisdom/Magic value: ');
-                
-                const power = parseInt(powerInput.trim());
-                const speed = parseInt(speedInput.trim());
-                const wisdom = parseInt(wisdomInput.trim());
-                
-                if (isNaN(power) || isNaN(speed) || isNaN(wisdom)) {
-                    throw new Error('All stat values must be valid integers');
-                }
-                
-                stats = { power, speed, wisdom };
-            } else {
-                // Generate random stats within the default range
-                const range = maxStat - minStat;
-                stats = {
-                    power: Math.floor(Math.random() * (range + 1)) + minStat,
-                    speed: Math.floor(Math.random() * (range + 1)) + minStat,
-                    wisdom: Math.floor(Math.random() * (range + 1)) + minStat
-                };
+            const power = parseInt(powerInput.trim());
+            const speed = parseInt(speedInput.trim());
+            const wisdom = parseInt(wisdomInput.trim());
+            
+            if (isNaN(power) || isNaN(speed) || isNaN(wisdom)) {
+                throw new Error('All stat values must be valid integers');
             }
+            
+            stats = { power, speed, wisdom };
         } else {
+            // Prompt for stats range for random generation
+            const statsRangeInput = await askQuestion('Enter stats range (min-max, or press Enter for default 1-99): ');
+            
+            let minStat = 1;
+            let maxStat = 99;
+            
+            if (statsRangeInput.trim()) {
+                const rangeMatch = statsRangeInput.trim().match(/^(-?\d+)-(-?\d+)$/);
+                if (rangeMatch) {
+                    minStat = parseInt(rangeMatch[1]);
+                    maxStat = parseInt(rangeMatch[2]);
+                    
+                    if (minStat >= maxStat) {
+                        throw new Error('Minimum value must be less than maximum value');
+                    }
+                } else {
+                    throw new Error('Invalid range format. Use format: min-max (e.g., 1-99 or -45-4839)');
+                }
+            }
+            
             // Generate random stats within the specified range
             const range = maxStat - minStat;
             stats = {
@@ -365,7 +373,8 @@ async function main() {
             uris,
             hash,
             parsedFile,
-            stats
+            stats,
+            isHonorary
         );
 
         console.log('Processing complete:');
